@@ -1,65 +1,186 @@
-import Image from "next/image";
+'use client';
+
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+
+const GRID_SIZE = 14;
+const MOVE_LIMIT = 25;
+
+const COLORS = [
+  { name: 'red', value: '#ef4444' },
+  { name: 'orange', value: '#f97316' },
+  { name: 'yellow', value: '#eab308' },
+  { name: 'green', value: '#22c55e' },
+  { name: 'blue', value: '#3b82f6' },
+  { name: 'purple', value: '#a855f7' },
+];
+
+type Board = number[][];
+
+function createBoard(): Board {
+  const board: Board = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    const row: number[] = [];
+    for (let c = 0; c < GRID_SIZE; c++) {
+      row.push(Math.floor(Math.random() * COLORS.length));
+    }
+    board.push(row);
+  }
+  return board;
+}
+
+function floodFill(board: Board, target: number): Board {
+  const start = board[0][0];
+  if (start === target) return board;
+
+  const next = board.map((row) => [...row]);
+  const stack: [number, number][] = [[0, 0]];
+  const seen = new Set<string>();
+
+  while (stack.length > 0) {
+    const [r, c] = stack.pop()!;
+    const key = `${r},${c}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (next[r][c] !== start) continue;
+
+    next[r][c] = target;
+
+    const neighbors: [number, number][] = [
+      [r - 1, c],
+      [r + 1, c],
+      [r, c - 1],
+      [r, c + 1],
+    ];
+    for (const [nr, nc] of neighbors) {
+      if (
+        nr >= 0 &&
+        nr < GRID_SIZE &&
+        nc >= 0 &&
+        nc < GRID_SIZE &&
+        !seen.has(`${nr},${nc}`)
+      ) {
+        stack.push([nr, nc]);
+      }
+    }
+  }
+
+  return next;
+}
+
+function isSolved(board: Board): boolean {
+  const first = board[0][0];
+  return board.every((row) => row.every((cell) => cell === first));
+}
 
 export default function Home() {
+  const [board, setBoard] = useState<Board>(() => createBoard());
+  const [moves, setMoves] = useState(0);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+
+  const reset = useCallback(() => {
+    setBoard(createBoard());
+    setMoves(0);
+  }, []);
+
+  const won = useMemo(() => board.length > 0 && isSolved(board), [board]);
+  const lost = useMemo(() => !won && moves >= MOVE_LIMIT, [won, moves]);
+  const gameOver = won || lost;
+
+  const handlePick = (colorIndex: number) => {
+    if (gameOver || board.length === 0) return;
+    if (board[0][0] === colorIndex) return;
+    setBoard((prev) => floodFill(prev, colorIndex));
+    setMoves((m) => m + 1);
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4 py-8 text-slate-100">
+      <div className="w-full max-w-md">
+        <header className="mb-6 text-center">
+          <h1 className="text-4xl font-bold tracking-tight text-white">Flood It</h1>
+          <p className="mt-2 text-sm text-slate-400">
+            Flood the whole board with a single color before you run out of moves.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        </header>
+
+        <div className="mb-4 flex items-center justify-between rounded-lg bg-slate-800 px-4 py-3 shadow">
+          <div className="text-sm">
+            <span className="text-slate-400">Moves</span>{' '}
+            <span className="font-semibold text-white">
+              {moves} / {MOVE_LIMIT}
+            </span>
+          </div>
+          <button
+            onClick={reset}
+            className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            Reset
+          </button>
+        </div>
+
+        <div
+          className="grid aspect-square gap-0.5 overflow-hidden rounded-lg bg-slate-800 p-1 shadow-lg"
+          style={{ gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))` }}
+        >
+          {mounted &&
+            board.map((row, r) =>
+              row.map((cell, c) => (
+                <div
+                  key={`${r}-${c}`}
+                  className="aspect-square w-full rounded-sm"
+                  style={{ backgroundColor: COLORS[cell].value }}
+                />
+              ))
+            )}
+        </div>
+
+        <div className="mt-5 flex justify-center gap-2">
+          {COLORS.map((color, i) => (
+            <button
+              key={color.name}
+              onClick={() => handlePick(i)}
+              disabled={gameOver}
+              aria-label={`Pick ${color.name}`}
+              className="h-11 w-11 rounded-full border-2 border-slate-700 transition hover:scale-110 disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ backgroundColor: color.value }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          ))}
         </div>
-      </main>
-    </div>
+
+        {gameOver && (
+          <div className="mt-6 text-center">
+            {won ? (
+              <p className="text-lg font-semibold text-green-400">
+                You won in {moves} {moves === 1 ? 'move' : 'moves'}!
+              </p>
+            ) : (
+              <p className="text-lg font-semibold text-red-400">
+                Out of moves! Try again.
+              </p>
+            )}
+            <button
+              onClick={reset}
+              className="mt-3 rounded-md bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+            >
+              Play Again
+            </button>
+          </div>
+        )}
+
+        <section className="mt-8 rounded-lg bg-slate-800 p-4 text-sm text-slate-300">
+          <h2 className="mb-2 font-semibold text-white">How to Play</h2>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>The flood region starts at the top-left cell.</li>
+            <li>Pick a color to flood your region into all touching cells of that color.</li>
+            <li>Grow the region until the entire board is one color.</li>
+            <li>You have {MOVE_LIMIT} moves. Use them wisely!</li>
+          </ul>
+        </section>
+      </div>
+    </main>
   );
 }
